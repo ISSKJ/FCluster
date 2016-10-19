@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">ClusterMapTest</string>
+    <string name="google_maps_key">AIzaSyAChj4q143daMgWJfOZDgXx2PMMuMnbook</string>
+</resources>
