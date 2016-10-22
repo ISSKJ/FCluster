@@ -4,11 +4,13 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.support.v4.widget.ContentLoadingProgressBar;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.util.StringBuilderPrinter;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.ProgressBar;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
@@ -55,11 +57,14 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             "http://wallpaperwarrior.com/wp-content/uploads/2016/08/Animal-Wallpaper-16-1024x640.jpg",
     };
 
+    private ProgressBar mProgress;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        mProgress = (ProgressBar)findViewById(R.id.progress);
         final SeekBar seekBar = (SeekBar)findViewById(R.id.scale_seekbar);
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -279,6 +284,11 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 return options;
             }
             return null;
+        }
+
+        @Override
+        public void onRendered(boolean rendering) {
+            mProgress.setVisibility(rendering ? View.VISIBLE : View.GONE);
         }
 
         @Override
