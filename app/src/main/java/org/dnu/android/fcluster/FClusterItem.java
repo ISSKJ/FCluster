@@ -34,6 +34,10 @@ public class FClusterItem {
         mPosition = pos;
     }
 
+    public void setPosition(LatLng latLng) {
+        mPosition = latLng;
+    }
+
     public LatLng getPosition() {
         return mPosition;
     }

@@ -18,16 +18,21 @@ public class FCluster extends FClusterItem {
 
     private LatLngBounds mBounds;
 
-    public FCluster(LatLng pos) {
-        super(pos);
+    public FCluster(LatLng position) {
+        super(position);
     }
 
     public void addItem(FClusterItem item) {
         mItems.add(item);
     }
 
-    public boolean contains(FClusterItem item) {
-        return mItems.contains(item);
+    public void merge(FCluster cluster) {
+        final Collection<FClusterItem> items = cluster.getClusterItems();
+        for (FClusterItem item : items) {
+            if (!mItems.contains(item)) {
+                mItems.add(item);
+            }
+        }
     }
 
     public void setBounds(LatLngBounds bounds) {

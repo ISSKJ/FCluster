@@ -18,12 +18,12 @@ import com.google.android.gms.maps.model.PolylineOptions;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.concurrent.ArrayBlockingQueue;
 
 /**
- * Created by isskj on 16/10/17.
+ * Cluster & Marker adapter
  */
-
 public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, GoogleMap.OnCameraIdleListener {
 
     public interface ClusterListener {
@@ -42,7 +42,6 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
     private static final int MAX_RENDERING_TASK_QUEUE = 5;
 
     private final ArrayList<FClusterItem> mItems = new ArrayList<>();
-    private final ArrayList<FClusterItem> mVisibleItems = new ArrayList<>();
     private final ArrayList<FCluster> mClusters = new ArrayList<>();
 
     private ClusterListener mClusterListener;
@@ -57,8 +56,12 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
 
     private boolean mMarkerClicked;
 
+    private float mZoomLevel;
+
+    private boolean mRendering;
+
     public boolean isRendering() {
-        return mExecutionTasks.size() > 0;
+        return mRendering || mExecutionTasks.size() > 0;
     }
 
     public FClusterAdapter(Handler uiHandler, GoogleMap map, int density) {
@@ -69,18 +72,15 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
         mMap.setOnMarkerClickListener(new GoogleMap.OnMarkerClickListener() {
             @Override
             public boolean onMarkerClick(Marker marker) {
-                Log.d(TAG, "marker click:");
                 mMarkerClicked = true;
                 mExecutionTasks.clear();
                 if (marker.getTag() instanceof FCluster) {
-                    Log.d(TAG, "marker cluster hit:");
                     if (mClusterListener != null) {
                         mClusterListener.onClickClister((FCluster)marker.getTag());
                     }
                     return false;
                 }
                 if (marker.getTag() instanceof FClusterItem) {
-                    Log.d(TAG, "marker cluster item hit:");
                     if (mClusterListener != null) {
                         mClusterListener.onClickClisterItem((FClusterItem)marker.getTag());
                     }
@@ -94,13 +94,9 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
             @Override
             public void run() {
                 while (mMap != null) {
-                    try {
-                        Log.d(TAG, "task running:");
-                        Runnable runnable = mExecutionTasks.take();
-                        Log.d(TAG, "task posted:");
+                    Runnable runnable = mExecutionTasks.poll();
+                    if (runnable != null) {
                         runnable.run();
-                    } catch (InterruptedException e) {
-                        Log.e(TAG, "run:"+e.toString());
                     }
                 }
             }
@@ -144,13 +140,13 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
     @Override
     public void remove(FClusterItem item) {
         mItems.remove(item);
-        mVisibleItems.remove(item);
     }
 
     @Override
     public void clear() {
         mItems.clear();
-        mVisibleItems.clear();
+        mMap.clear();
+        mClusters.clear();
     }
 
     public abstract MarkerOptions newClusterOption(FCluster cluster);
@@ -171,12 +167,17 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
             mMarkerClicked = false;
             return;
         }
-        if (mExecutionTasks.size() < MAX_RENDERING_TASK_QUEUE) {
-            computeCluster();
+        if (!isRendering()) {
+            final float zoom = mMap.getCameraPosition().zoom;
+            final boolean zoomed = zoom != mZoomLevel;
+            if (zoom != mZoomLevel) {
+                mZoomLevel = zoom;
+            }
+            computeCluster(zoomed);
         }
     }
 
-    private void computeCluster() {
+    private void computeCluster(final boolean zoomed) {
         final LatLngBounds bounds = mMap.getProjection().getVisibleRegion().latLngBounds;
         final Projection projection = mMap.getProjection();
         mExecutionTasks.add(new Runnable() {
@@ -185,27 +186,41 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
                 if (mMap == null) {
                     return;
                 }
-                mVisibleItems.clear();
+
+                mRendering = true;
+                final ArrayList<FCluster> clusters;
+                if (zoomed) {
+                    clusters = new ArrayList<>();
+                } else {
+                    clusters = new ArrayList<>(mClusters);
+                }
+
+                final ArrayList<FClusterItem> visibleItems = new ArrayList<>();
                 for (FClusterItem item : mItems) {
                     if (bounds.contains(item.getPosition())) {
-                        mVisibleItems.add(item);
+                        visibleItems.add(item);
                     }
                 }
-                Log.d(TAG, "visible count:"+mVisibleItems.size());
 
-                final ArrayList<FCluster> clusters = new ArrayList<>();
-                ArrayList<FClusterItem> modifiedItems = new ArrayList<>(mVisibleItems);
+                for (FCluster cluster : clusters) {
+                    for (FClusterItem item : cluster.getClusterItems()) {
+                        visibleItems.remove(item);
+                    }
+                }
+
+                ArrayList<FClusterItem> modifiedItems = visibleItems;
+                Collections.shuffle(modifiedItems);
                 for (int i = 0; i < modifiedItems.size(); i++) {
                     final FClusterItem item = modifiedItems.get(i);
                     final Point pItem = projection.toScreenLocation(item.getPosition());
                     final Point southWest = new Point(pItem.x - mClusterDensity, pItem.y + mClusterDensity);
                     final Point northEast = new Point(pItem.x + mClusterDensity, pItem.y - mClusterDensity);
                     final LatLngBounds bounds = new LatLngBounds(projection.fromScreenLocation(southWest), projection.fromScreenLocation(northEast));
+
                     final FCluster cluster = new FCluster(item.getPosition());
                     cluster.setBounds(bounds);
 
-                    ArrayList<FClusterItem> tmp = new ArrayList<>(modifiedItems);
-                    tmp.remove(item);
+                    final ArrayList<FClusterItem> tmp = new ArrayList<>(modifiedItems);
                     for (int j = 0; j < modifiedItems.size(); j++) {
                         final FClusterItem item2 = modifiedItems.get(j);
                         if (bounds.contains(item2.getPosition())) {
@@ -215,69 +230,81 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
                     }
                     if (cluster.getSize() > MIN_CLUSTER_SIZE && shouldCluster()) {
                         clusters.add(cluster);
+                        modifiedItems = tmp;
+                        i = 0;
                     }
-                    modifiedItems = tmp;
                 }
-                final ArrayList<FClusterItem> shouldAddItems = new ArrayList<>();
-                final ArrayList<FClusterItem> shouldRemoveItems = new ArrayList<>();
-                final ArrayList<FClusterItem> unclusters = new ArrayList<>(mVisibleItems);
+
+                ArrayList<FCluster> modified = clusters;
+                for (int i = 0; i < modified.size(); i++) {
+                    final FCluster cluster = modified.get(i);
+                    final Point pItem = projection.toScreenLocation(cluster.getPosition());
+                    final Point southWest = new Point(pItem.x - mClusterDensity, pItem.y + mClusterDensity);
+                    final Point northEast = new Point(pItem.x + mClusterDensity, pItem.y - mClusterDensity);
+                    final LatLngBounds bounds = new LatLngBounds(projection.fromScreenLocation(southWest), projection.fromScreenLocation(northEast));
+
+                    for (int j = 0; j < modified.size(); j++) {
+                        final FCluster cluster2 = modified.get(j);
+                        if (cluster == cluster2) {
+                            continue;
+                        }
+                        if (bounds.contains(cluster2.getPosition())) {
+                            cluster.merge(cluster2);
+                            modified.remove(cluster2);
+                            i = 0;
+                        }
+                    }
+                }
+
                 for (FCluster cluster : clusters) {
                     for (FClusterItem item : cluster.getClusterItems()) {
-                        unclusters.remove(item);
-                        shouldRemoveItems.add(item);
+                        visibleItems.remove(item);
                     }
                 }
-                for (FClusterItem item : unclusters) {
-                    if (bounds.contains(item.getPosition())) {
-                        shouldAddItems.add(item);
-                    }
-                }
-                Log.d(TAG, "uncluster count:"+unclusters.size());
-                if (mUIHandler != null) {
-                    mUIHandler.post(new Runnable() {
-                        @Override
-                        public void run() {
-                            Log.d(TAG, "clusters sum:"+clusters.size());
-                            clearCluster();
-                            for (FCluster cluster : clusters) {
-                                Log.d(TAG, "cluster count:"+cluster.getSize());
-                                addCluster(cluster);
-                            }
-                            for (FClusterItem item : shouldRemoveItems) {
-                                removeMarker(item);
-                                if (item.isCircle()) {
-                                    removeCircle(item);
-                                }
-                                if (item.isPolyline()) {
-                                    removePolyline(item);
-                                }
-                                if (item.isPolygon()) {
-                                    removePolygon(item);
-                                }
-                            }
-                            for (FClusterItem item : shouldAddItems) {
-                                addMarker(item);
-                                if (item.isCircle()) {
-                                    addCircle(item);
-                                }
-                                if (item.isPolyline()) {
-                                    addPolyline(item);
-                                }
-                                if (item.isPolygon()) {
-                                    addPolygon(item);
-                                }
-                            }
-                            Log.d(TAG, "should remove count:"+shouldRemoveItems.size());
-                            Log.d(TAG, "should add count:"+shouldAddItems.size());
+
+                mClusters.clear();
+                mClusters.addAll(clusters);
+
+                // update cluster
+                postUI(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (mMap == null) {
+                            return;
                         }
-                    });
-                }
+                        mMap.clear();
+
+                        for (FClusterItem item : visibleItems) {
+                            addMarker(item);
+                            if (item.isCircle()) {
+                                addCircle(item);
+                            }
+                            if (item.isPolyline()) {
+                                addPolyline(item);
+                            }
+                            if (item.isPolygon()) {
+                                addPolygon(item);
+                            }
+                        }
+
+                        for (FCluster cluster : clusters) {
+                            addCluster(cluster);
+                        }
+                        mRendering = false;
+                    }
+                });
             }
         });
     }
 
+    private void postUI(Runnable runnable) {
+        if (mUIHandler != null) {
+            mUIHandler.post(runnable);
+        }
+    }
+
     private void addCluster(FCluster cluster) {
-        mClusters.add(cluster);
+        removeCluster(cluster);
         MarkerOptions options = newClusterOption(cluster);
         if (options != null) {
             cluster.setMarker(mMap.addMarker(options));
@@ -287,12 +314,11 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
         }
     }
 
-    private void clearCluster() {
-        for (FCluster cluster : mClusters) {
-            final Marker marker = cluster.getMarker();
-            if (marker != null) {
-                marker.remove();
-            }
+    private void removeCluster(FCluster cluster) {
+        final Marker marker = cluster.getMarker();
+        if (marker != null) {
+            marker.remove();
+            cluster.setMarker(null);
         }
     }
 
@@ -367,6 +393,10 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
             polygon.remove();
             item.setPolygon(null);
         }
+    }
+
+    private void debug(Object obj) {
+        Log.d(TAG, obj.toString());
     }
 }
 

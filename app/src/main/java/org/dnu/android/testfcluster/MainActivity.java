@@ -6,6 +6,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.util.StringBuilderPrinter;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.SeekBar;
@@ -117,7 +118,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     private void setRandomData(int progress) {
-        int size = 50000;
+        int size = 100000;
         dummy = new LatLng[size];
         for (int i = 0; i < size; i++) {
             double w = progress * 5.0 * Math.sqrt(mRandom.nextDouble());
@@ -189,8 +190,16 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
             final Object tag = mAdapter.getMarkerTag(marker);
             if (tag instanceof FCluster) {
-                tvTitle.setText("TEST CLUSTER");
-                tvSnippet.setText("ISSKJ");
+                final FCluster cluster = (FCluster)tag;
+                final StringBuilder sb = new StringBuilder();
+                sb.append("cluster size:"+cluster.getSize());
+                sb.append("\n");
+                for (FClusterItem item : cluster.getClusterItems()) {
+                    final Sample sample = (Sample) item.getTag();
+                    sb.append(sample.title);
+                    sb.append("\n");
+                }
+                tvTitle.setText(sb);
             } else if (tag instanceof FClusterItem) {
                 FClusterItem item = (FClusterItem)tag;
                 if (item.getTag() instanceof Sample) {
