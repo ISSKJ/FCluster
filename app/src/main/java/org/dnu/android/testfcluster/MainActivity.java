@@ -28,7 +28,6 @@ import com.google.android.gms.maps.model.PolylineOptions;
 import org.dnu.android.fcluster.FCluster;
 import org.dnu.android.fcluster.FClusterAdapter;
 import org.dnu.android.fcluster.FClusterItem;
-import org.dnu.android.fcluster.MapIconGenerator;
 
 import java.util.Random;
 
@@ -168,18 +167,25 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     @Override
     public void onClickClisterItem(FClusterItem item) {
-        Log.d("FCluster", "cluster item clicked."+item.getMarker().getTitle());
-    }
-
-    @Override
-    public void onClickInfoWindow(FClusterItem item) {
-        Log.d("FCluster", "cluster item info window clicked."+item.getMarker().getTitle());
+        if (item.getTag() instanceof Sample) {
+            final Sample sample = (Sample)item.getTag();
+            Log.d("FCluster", "cluster item clicked."+sample.title);
+        }
     }
 
     @Override
     public void onClickInfoWindow(FCluster cluster) {
         Log.d("FCluster", "cluster info window clicked."+cluster.getSize());
     }
+
+    @Override
+    public void onClickInfoWindow(FClusterItem item) {
+        if (item.getTag() instanceof Sample) {
+            final Sample sample = (Sample)item.getTag();
+            Log.d("FCluster", "cluster item info window clicked."+sample.title);
+        }
+    }
+
 
     private class MyInfoWindowAdapter implements GoogleMap.InfoWindowAdapter {
         @Override

@@ -8,6 +8,7 @@ import android.util.SparseArray;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.Projection;
 import com.google.android.gms.maps.model.CircleOptions;
+import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
@@ -64,6 +65,7 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
     public FClusterAdapter(Handler uiHandler, GoogleMap map, int density) {
         mMap = map;
         mMap.setOnCameraIdleListener(this);
+        mMap.setIndoorEnabled(false);
         mUIHandler = uiHandler;
         mClusterDensity = density;
         mMap.setOnMarkerClickListener(new GoogleMap.OnMarkerClickListener() {
@@ -205,22 +207,14 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
                     if (bounds.contains(item.getPosition())) {
                         visibleItems.add(item);
                     }
-                }
-
-                for (FCluster cluster : clusters) {
-                    for (FClusterItem item : cluster.getClusterItems()) {
-                        visibleItems.remove(item);
-                    }
+                    item.setMarker(null);
                 }
 
                 ArrayList<FClusterItem> modifiedItems = visibleItems;
                 Collections.shuffle(modifiedItems);
                 for (int i = 0; i < modifiedItems.size(); i++) {
                     final FClusterItem item = modifiedItems.get(i);
-                    final Point pItem = projection.toScreenLocation(item.getPosition());
-                    final Point southWest = new Point(pItem.x - mClusterDensity, pItem.y + mClusterDensity);
-                    final Point northEast = new Point(pItem.x + mClusterDensity, pItem.y - mClusterDensity);
-                    final LatLngBounds bounds = new LatLngBounds(projection.fromScreenLocation(southWest), projection.fromScreenLocation(northEast));
+                    final LatLngBounds bounds = getVisibleLatLngBounds(projection, item);
 
                     final FCluster cluster = new FCluster(item.getPosition());
                     cluster.setBounds(bounds);
@@ -243,10 +237,7 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
                 ArrayList<FCluster> modified = clusters;
                 for (int i = 0; i < modified.size(); i++) {
                     final FCluster cluster = modified.get(i);
-                    final Point pItem = projection.toScreenLocation(cluster.getPosition());
-                    final Point southWest = new Point(pItem.x - mClusterDensity, pItem.y + mClusterDensity);
-                    final Point northEast = new Point(pItem.x + mClusterDensity, pItem.y - mClusterDensity);
-                    final LatLngBounds bounds = new LatLngBounds(projection.fromScreenLocation(southWest), projection.fromScreenLocation(northEast));
+                    final LatLngBounds bounds = getVisibleLatLngBounds(projection, cluster);
 
                     for (int j = 0; j < modified.size(); j++) {
                         final FCluster cluster2 = modified.get(j);
@@ -265,6 +256,7 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
                     for (FClusterItem item : cluster.getClusterItems()) {
                         visibleItems.remove(item);
                     }
+                    cluster.setMarker(null);
                 }
 
                 mClusters.clear();
@@ -275,12 +267,14 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
                     final Marker marker = item.getMarker();
                     if (marker == null) {
                         shouldRender = true;
+                        break;
                     }
                 }
                 for (FCluster cluster : clusters) {
                     final Marker marker = cluster.getMarker();
                     if (marker == null) {
                         shouldRender = true;
+                        break;
                     }
                 }
                 if (!shouldRender) {
@@ -379,6 +373,13 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
         } else {
             item.setPolygon(null);
         }
+    }
+
+    private LatLngBounds getVisibleLatLngBounds(Projection projection, FClusterItem item) {
+        final Point pItem = projection.toScreenLocation(item.getPosition());
+        final Point southWest = new Point(pItem.x - mClusterDensity, pItem.y + mClusterDensity);
+        final Point northEast = new Point(pItem.x + mClusterDensity, pItem.y - mClusterDensity);
+        return new LatLngBounds(projection.fromScreenLocation(southWest), projection.fromScreenLocation(northEast));
     }
 
     private void debug(Object obj) {
