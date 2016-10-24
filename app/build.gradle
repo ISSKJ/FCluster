@@ -5,7 +5,7 @@ android {
         debug {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
-            storeFile file('/Users/issei/git/FCluster/debug.keystore')
+            storeFile file('../debug.keystore')
             storePassword 'android'
         }
     }

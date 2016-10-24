@@ -8,7 +8,6 @@ import android.util.SparseArray;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.Projection;
 import com.google.android.gms.maps.model.CircleOptions;
-import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
@@ -17,7 +16,6 @@ import com.google.android.gms.maps.model.PolylineOptions;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.concurrent.ArrayBlockingQueue;
 
 /**
@@ -211,7 +209,6 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
                 }
 
                 ArrayList<FClusterItem> modifiedItems = visibleItems;
-                Collections.shuffle(modifiedItems);
                 for (int i = 0; i < modifiedItems.size(); i++) {
                     final FClusterItem item = modifiedItems.get(i);
                     final LatLngBounds bounds = getVisibleLatLngBounds(projection, item);
