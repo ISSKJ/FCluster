@@ -4,10 +4,8 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.support.v4.widget.ContentLoadingProgressBar;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
-import android.util.StringBuilderPrinter;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ProgressBar;
@@ -240,7 +238,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         @Override
         public MarkerOptions newMarkerOption(FClusterItem item) {
             if (item.getTag() instanceof Sample) {
-                final Sample sample = (Sample)item.getTag();
+                final Sample sample = (Sample) item.getTag();
                 final MarkerOptions options = new MarkerOptions();
                 options.position(item.getPosition());
                 options.icon(mMapIconGenerator.getDescriptor(sample.imageURL));
@@ -252,7 +250,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         @Override
         public CircleOptions newCircleOption(FClusterItem item) {
             if (item.getTag() instanceof Sample) {
-                final Sample sample = (Sample)item.getTag();
+                final Sample sample = (Sample) item.getTag();
                 final CircleOptions options = new CircleOptions();
                 options.center(item.getPosition());
                 options.radius(sample.radius);
@@ -266,7 +264,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         @Override
         public PolylineOptions newPolylineOption(FClusterItem item) {
             if (item.getTag() instanceof Sample) {
-                final Sample sample = (Sample)item.getTag();
+                final Sample sample = (Sample) item.getTag();
                 final PolylineOptions options = new PolylineOptions();
                 options.add(item.getPosition());
                 options.add(sample.polylineLatLng);
@@ -281,7 +279,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         @Override
         public PolygonOptions newPolygonOption(FClusterItem item) {
             if (item.getTag() instanceof Sample) {
-                final Sample sample = (Sample)item.getTag();
+                final Sample sample = (Sample) item.getTag();
                 final PolygonOptions options = new PolygonOptions();
                 options.addAll(sample.polygonLatLng);
                 options.geodesic(false);
@@ -293,13 +291,13 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
 
         @Override
-        public void onRendered(boolean rendering) {
-            mProgress.setVisibility(rendering ? View.VISIBLE : View.GONE);
+        public boolean shouldCluster(FClusterItem item) {
+            return mShouldCluster;
         }
 
         @Override
-        public boolean shouldCluster() {
-            return mShouldCluster;
+        public void onRendered(boolean rendering) {
+            mProgress.setVisibility(rendering ? View.VISIBLE : View.GONE);
         }
     }
 }

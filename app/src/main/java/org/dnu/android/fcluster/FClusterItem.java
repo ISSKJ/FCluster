@@ -1,5 +1,7 @@
 package org.dnu.android.fcluster;
 
+import android.location.Location;
+
 import com.google.android.gms.maps.model.Circle;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
@@ -104,6 +106,12 @@ public class FClusterItem {
 
     public void setPolygon() {
         mMarkerType = MarkerType.POLYGON;
+    }
+
+    public boolean tooNear(LatLng position) {
+        float[] results = new float[2];
+        Location.distanceBetween(mPosition.latitude, mPosition.longitude, position.latitude, position.longitude, results);
+        return results[0] < 100;
     }
 }
 

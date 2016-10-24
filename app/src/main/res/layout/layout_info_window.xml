@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:orientation="vertical" android:layout_width="match_parent"
-    android:layout_height="match_parent"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
     android:background="@drawable/info_window_bg"
     android:layout_marginBottom="5dp"
+    android:orientation="vertical"
     android:paddingLeft="10dp"
     android:paddingRight="10dp">
 
@@ -12,8 +13,6 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textColor="#2E7D32"
-        android:ellipsize="end"
-        android:maxLines="5"
         android:textSize="17sp"/>
     <TextView
         android:id="@+id/snippet_text"

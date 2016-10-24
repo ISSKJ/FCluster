@@ -3,20 +3,28 @@ package org.dnu.android.fcluster;
 import android.graphics.Point;
 import android.os.Handler;
 import android.util.Log;
-import android.util.SparseArray;
 
+import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.Projection;
+import com.google.android.gms.maps.model.Circle;
 import com.google.android.gms.maps.model.CircleOptions;
+import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.PolygonOptions;
+import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
+import com.google.android.gms.maps.model.VisibleRegion;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
+
 
 /**
  * Cluster & Marker adapter
@@ -37,10 +45,9 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
 
     private static final int MIN_CLUSTER_SIZE = 3;
 
-    private final ArrayList<FClusterItem> mItems = new ArrayList<>();
+    protected final ArrayList<FClusterItem> mItems = new ArrayList<>();
     private final ArrayList<FCluster> mClusters = new ArrayList<>();
-
-    private SparseArray<MarkerOptions> mCacheClusterMarkerOption = new SparseArray<>();
+    private final ArrayList<FClusterItem> mDrawedItems = new ArrayList<>();
 
     private ClusterListener mClusterListener;
 
@@ -100,6 +107,10 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
         }).start();
     }
 
+    public float getZoomLevel() {
+        return mZoomLevel;
+    }
+
     public void setInfoWindowAdapter(GoogleMap.InfoWindowAdapter adapter, final InfoWindowListener listener) {
         mMap.setInfoWindowAdapter(adapter);
         mMap.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener() {
@@ -156,7 +167,7 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
 
     public abstract PolygonOptions newPolygonOption(FClusterItem item);
 
-    public abstract boolean shouldCluster();
+    public abstract boolean shouldCluster(FClusterItem item);
 
     public void onRendered(boolean rendering) {
     }
@@ -205,7 +216,6 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
                     if (bounds.contains(item.getPosition())) {
                         visibleItems.add(item);
                     }
-                    item.setMarker(null);
                 }
 
                 ArrayList<FClusterItem> modifiedItems = visibleItems;
@@ -218,13 +228,17 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
 
                     final ArrayList<FClusterItem> tmp = new ArrayList<>(modifiedItems);
                     for (int j = 0; j < modifiedItems.size(); j++) {
+                        if (i == j) {
+                            continue;
+                        }
                         final FClusterItem item2 = modifiedItems.get(j);
                         if (bounds.contains(item2.getPosition())) {
                             cluster.addItem(item2);
                             tmp.remove(item2);
                         }
                     }
-                    if (cluster.getSize() > MIN_CLUSTER_SIZE && shouldCluster()) {
+                    if (cluster.getSize() > MIN_CLUSTER_SIZE && shouldCluster(item)) {
+                        cluster.addItem(item);
                         clusters.add(cluster);
                         modifiedItems = tmp;
                         i = 0;
@@ -249,40 +263,22 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
                     }
                 }
 
+
                 for (FCluster cluster : clusters) {
-                    for (FClusterItem item : cluster.getClusterItems()) {
-                        visibleItems.remove(item);
-                    }
-                    cluster.setMarker(null);
+                    visibleItems.removeAll(cluster.getClusterItems());
+                    mDrawedItems.addAll(cluster.getClusterItems());
                 }
+
+                uniqueClusterItem(visibleItems);
+                uniqueCluster(clusters);
+                uniqueClusterItem(mDrawedItems);
 
                 mClusters.clear();
                 mClusters.addAll(clusters);
 
-                boolean shouldRender = false;
-                for (FClusterItem item : visibleItems) {
-                    final Marker marker = item.getMarker();
-                    if (marker == null) {
-                        shouldRender = true;
-                        break;
-                    }
-                }
-                for (FCluster cluster : clusters) {
-                    final Marker marker = cluster.getMarker();
-                    if (marker == null) {
-                        shouldRender = true;
-                        break;
-                    }
-                }
-                if (!shouldRender) {
-                    postUI(new Runnable() {
-                        @Override
-                        public void run() {
-                            onRendered(false);
-                        }
-                    });
-                    return;
-                }
+                debug("visible item:"+visibleItems.size());
+                debug("visible cluster:"+clusters.size());
+                debug("remove items:"+mDrawedItems.size());
 
                 // update cluster
                 postUI(new Runnable() {
@@ -291,7 +287,6 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
                         if (mMap == null) {
                             return;
                         }
-                        mMap.clear();
 
                         for (FClusterItem item : visibleItems) {
                             addMarker(item);
@@ -309,6 +304,9 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
                         for (FCluster cluster : clusters) {
                             addCluster(cluster);
                         }
+                        clearMarker();
+                        mDrawedItems.addAll(visibleItems);
+                        mDrawedItems.addAll(clusters);
                         onRendered(false);
                     }
                 });
@@ -322,45 +320,105 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
         }
     }
 
+    private void clearMarker() {
+        for (FClusterItem item : mDrawedItems) {
+            final Marker marker = item.getMarker();
+            final Circle circle = item.getCircle();
+            final Polyline polyline = item.getPolyline();
+            final Polygon polygon = item.getPolygon();
+            if (marker != null) {
+                marker.remove();
+                item.setMarker(null);
+            }
+            if (circle != null) {
+                circle.remove();
+                item.setCircle(null);
+            }
+            if (polyline != null) {
+                polyline.remove();
+                item.setPolyline(null);
+            }
+            if (polygon != null) {
+                polygon.remove();
+                item.setPolygon(null);
+            }
+        }
+        mDrawedItems.clear();
+    }
+
     private void addCluster(FCluster cluster) {
-        MarkerOptions options = mCacheClusterMarkerOption.get(cluster.getSize());
+        final Marker marker = cluster.getMarker();
+        MarkerOptions options = newClusterOption(cluster);
         if (options == null) {
-            options = newClusterOption(cluster);
-        }
-        if (options != null) {
-            cluster.setMarker(mMap.addMarker(options));
-            cluster.getMarker().setTag(cluster);
-        } else {
             cluster.setMarker(null);
+            return;
         }
+        if (marker != null) {
+            marker.setPosition(options.getPosition());
+            marker.setTag(cluster);
+            marker.setTitle(options.getTitle());
+            marker.setSnippet(options.getSnippet());
+            marker.setIcon(options.getIcon());
+            mDrawedItems.remove(cluster);
+            return;
+        }
+        cluster.setMarker(mMap.addMarker(options));
+        cluster.getMarker().setTag(cluster);
     }
 
     private void addMarker(FClusterItem item) {
+        final Marker marker = item.getMarker();
         MarkerOptions options = newMarkerOption(item);
-        if (options != null) {
-            item.setMarker(mMap.addMarker(options));
-            item.getMarker().setTag(item);
-        } else {
+        if (options == null) {
             item.setMarker(null);
+            return;
         }
+        if (marker != null) {
+            marker.setPosition(options.getPosition());
+            marker.setTitle(options.getTitle());
+            marker.setSnippet(options.getSnippet());
+            marker.setIcon(options.getIcon());
+            marker.setTag(item);
+            mDrawedItems.remove(item);
+            return;
+        }
+        item.setMarker(mMap.addMarker(options));
+        item.getMarker().setTag(item);
     }
 
     private void addCircle(FClusterItem item) {
-        final CircleOptions circleOptions = newCircleOption(item);
-        if (circleOptions != null) {
-            item.setCircle(mMap.addCircle(circleOptions));
-        } else {
+        final Circle circle = item.getCircle();
+        final CircleOptions options = newCircleOption(item);
+        if (options == null) {
             item.setCircle(null);
+            return;
         }
+        if (circle != null) {
+            circle.setCenter(options.getCenter());
+            circle.setRadius(options.getRadius());
+            circle.setFillColor(options.getFillColor());
+            circle.setStrokeColor(options.getStrokeColor());
+            circle.setStrokeWidth(options.getStrokeWidth());
+            return;
+        }
+        item.setCircle(mMap.addCircle(options));
     }
 
     private void addPolyline(FClusterItem item) {
-        final PolylineOptions polylineOptions = newPolylineOption(item);
-        if (polylineOptions != null) {
-            item.setPolyline(mMap.addPolyline(polylineOptions));
-        } else {
+        final Polyline polyline = item.getPolyline();
+        final PolylineOptions options = newPolylineOption(item);
+        if (options == null) {
             item.setPolyline(null);
+            return;
         }
+        if (polyline != null) {
+            polyline.setColor(options.getColor());
+            polyline.setGeodesic(options.isGeodesic());
+            polyline.setPoints(options.getPoints());
+            polyline.setWidth(options.getWidth());
+            return;
+        }
+        item.setPolyline(mMap.addPolyline(options));
     }
 
     private void addPolygon(FClusterItem item) {
@@ -372,6 +430,17 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
         }
     }
 
+    private void uniqueClusterItem(ArrayList<FClusterItem> list) {
+        Set<FClusterItem> set = new HashSet<>(list);
+        list.clear();
+        list.addAll(set);
+    }
+    private void uniqueCluster(ArrayList<FCluster> list) {
+        Set<FCluster> set = new HashSet<>(list);
+        list.clear();
+        list.addAll(set);
+    }
+
     private LatLngBounds getVisibleLatLngBounds(Projection projection, FClusterItem item) {
         final Point pItem = projection.toScreenLocation(item.getPosition());
         final Point southWest = new Point(pItem.x - mClusterDensity, pItem.y + mClusterDensity);
@@ -381,6 +450,34 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
 
     private void debug(Object obj) {
         Log.d(TAG, obj.toString());
+    }
+
+    public VisibleRegion getVisibleRegion() {
+        return mMap.getProjection().getVisibleRegion();
+    }
+    public GoogleMap getMap() {
+        return mMap;
+    }
+    public void zoomToFurthestMarker() {
+        boolean shouldZoom = false;
+        LatLngBounds.Builder builder = new LatLngBounds.Builder();
+        for (FClusterItem item : mItems) {
+            builder.include(item.getPosition());
+            shouldZoom = true;
+        }
+        if (shouldZoom) {
+            LatLngBounds bounds = builder.build();
+            int padding = 100;
+            mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, padding));
+        }
+    }
+
+    public void moveToLocation(LatLng latLng, boolean animate, float defaultZoom) {
+        if (animate) {
+            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, defaultZoom));
+        } else {
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, defaultZoom));
+        }
     }
 }
 

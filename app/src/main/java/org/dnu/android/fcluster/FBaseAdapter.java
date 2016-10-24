@@ -1,6 +1,5 @@
 package org.dnu.android.fcluster;
 
-
 import java.util.Collection;
 
 /**
