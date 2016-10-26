@@ -159,16 +159,18 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     @Override
-    public void onClickClister(FCluster cluster) {
+    public boolean onClickCluster(FCluster cluster) {
         Log.d("FCluster", "cluster clicked."+cluster.getSize());
+        return false;
     }
 
     @Override
-    public void onClickClisterItem(FClusterItem item) {
+    public boolean onClickClusterItem(FClusterItem item) {
         if (item.getTag() instanceof Sample) {
             final Sample sample = (Sample)item.getTag();
             Log.d("FCluster", "cluster item clicked."+sample.title);
         }
+        return false;
     }
 
     @Override

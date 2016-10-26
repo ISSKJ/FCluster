@@ -4,6 +4,7 @@ import android.graphics.Point;
 import android.os.Handler;
 import android.util.Log;
 
+import com.google.android.gms.maps.CameraUpdate;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.Projection;
@@ -25,15 +26,14 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 
-
 /**
  * Cluster & Marker adapter
  */
 public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, GoogleMap.OnCameraIdleListener {
 
     public interface ClusterListener {
-        void onClickClister(FCluster cluster);
-        void onClickClisterItem(FClusterItem item);
+        boolean onClickCluster(FCluster cluster);
+        boolean onClickClusterItem(FClusterItem item);
     }
 
     public interface InfoWindowListener {
@@ -41,15 +41,21 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
         void onClickInfoWindow(FCluster cluster);
     }
 
+    public interface RenderListener {
+        void onFinishRendered();
+    }
+
     private static final String TAG = FClusterAdapter.class.getSimpleName();
 
-    private static final int MIN_CLUSTER_SIZE = 3;
+    private static final int MIN_CLUSTER_SIZE = 5;
 
     protected final ArrayList<FClusterItem> mItems = new ArrayList<>();
     private final ArrayList<FCluster> mClusters = new ArrayList<>();
     private final ArrayList<FClusterItem> mDrawedItems = new ArrayList<>();
 
     private ClusterListener mClusterListener;
+
+    private RenderListener mRenderListener;
 
     private GoogleMap mMap;
 
@@ -80,13 +86,13 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
                 mExecutionTasks.clear();
                 if (marker.getTag() instanceof FCluster) {
                     if (mClusterListener != null) {
-                        mClusterListener.onClickClister((FCluster)marker.getTag());
+                        return mClusterListener.onClickCluster((FCluster)marker.getTag());
                     }
                     return false;
                 }
                 if (marker.getTag() instanceof FClusterItem) {
                     if (mClusterListener != null) {
-                        mClusterListener.onClickClisterItem((FClusterItem)marker.getTag());
+                        return mClusterListener.onClickClusterItem((FClusterItem)marker.getTag());
                     }
                     return false;
                 }
@@ -105,6 +111,14 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
                 }
             }
         }).start();
+    }
+
+    public void setRenderListener(RenderListener listener) {
+        mRenderListener = listener;
+    }
+
+    public void render() {
+        onCameraIdle();
     }
 
     public float getZoomLevel() {
@@ -308,6 +322,10 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
                         mDrawedItems.addAll(visibleItems);
                         mDrawedItems.addAll(clusters);
                         onRendered(false);
+
+                        if (mRenderListener != null) {
+                            mRenderListener.onFinishRendered();
+                        }
                     }
                 });
             }
@@ -455,9 +473,11 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
     public VisibleRegion getVisibleRegion() {
         return mMap.getProjection().getVisibleRegion();
     }
+
     public GoogleMap getMap() {
         return mMap;
     }
+
     public void zoomToFurthestMarker() {
         boolean shouldZoom = false;
         LatLngBounds.Builder builder = new LatLngBounds.Builder();
@@ -478,6 +498,24 @@ public abstract class FClusterAdapter implements FBaseAdapter<FClusterItem>, Goo
         } else {
             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, defaultZoom));
         }
+    }
+
+    public ArrayList<FClusterItem> getItems() {
+        return mItems;
+    }
+
+
+    public void animateCamera(CameraUpdate cameraUpdate) {
+        getMap().animateCamera(cameraUpdate, new GoogleMap.CancelableCallback() {
+            @Override
+            public void onFinish() {
+                onCameraIdle();
+            }
+
+            @Override
+            public void onCancel() {
+            }
+        });
     }
 }
 
